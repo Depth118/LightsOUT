@@ -4,12 +4,12 @@ A clean, modern F1 race schedule web app with live countdowns and timezone-aware
 
 ## Features
 
-- 🏁 **Live Countdowns** - Real-time countdown to the next race
-- 🌍 **Timezone Support** - Toggle between local and UTC times
-- 📱 **Responsive Design** - Optimized for mobile and desktop
-- 🔍 **Search Functionality** - Find races by name, circuit, or location
-- 🎨 **Premium UI** - Dark theme with F1 red accents
-- ⚡ **Fast & Clean** - Built with modern web technologies
+- **Live countdowns**: Real-time countdown to the next race
+- **Timezone support**: Toggle between local and UTC times
+- **Responsive design**: Optimized for mobile and desktop
+- **Search**: Find races by name, circuit, or location
+- **Premium UI**: Dark theme with F1 red accents
+- **Fast and clean**: Built with modern web technologies
 
 ## Tech Stack
 
