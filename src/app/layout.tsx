@@ -18,6 +18,8 @@ export const metadata: Metadata = {
     "LightsOUT shows the next F1 race with a live countdown and a premium season schedule.",
   icons: {
     icon: "/icon.svg",
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
   },
 };
 
