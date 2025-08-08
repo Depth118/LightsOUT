@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LightsOUT — F1 Schedule",
+  title: "LightsOUT - F1 Schedule",
   description:
     "LightsOUT shows the next F1 race with a live countdown and a premium season schedule.",
   icons: {
