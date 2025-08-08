@@ -90,3 +90,4 @@ export function getNextRace(
     );
   return upcoming[0] ?? null;
 }
+
