@@ -29,6 +29,30 @@ function formatSessionTime(isoString: string | null | undefined, useLocal: boole
   return useLocal ? date.toLocaleString() : date.toUTCString();
 }
 
+function formatSessionTimeCompact(isoString: string | null | undefined, useLocal: boolean): string {
+  if (!isoString) return "";
+  const date = new Date(isoString);
+
+  if (useLocal) {
+    // Format: "Nov 21, 3:30 PM"
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+  } else {
+    // Format: "Nov 21, 15:30 UTC"
+    const month = date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+    const day = date.getUTCDate();
+    const hours = String(date.getUTCHours()).padStart(2, '0');
+    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+    return `${month} ${day}, ${hours}:${minutes} UTC`;
+  }
+}
+
+
 type NextSession = {
   name: string;
   time: string;
@@ -161,82 +185,88 @@ export default function ScheduleClient({ races }: { races: NormalizedRace[] }) {
                 </button>
 
                 {showWeekendSchedule && (
-                  <div className="text-sm text-muted-foreground space-y-2 mt-2">
+                  <div className="text-xs sm:text-sm text-muted-foreground space-y-1.5 mt-2">
                     {nextSession.race.sessions.fp1 && (
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">FP1:</span>
-                        <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                        <span className="font-medium shrink-0">FP1:</span>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
                           {new Date(nextSession.race.sessions.fp1).getTime() > Date.now() && (
-                            <span className="text-primary font-mono text-xs">
+                            <span className="text-primary font-mono text-[10px] sm:text-xs shrink-0">
                               <Countdown utcISO={nextSession.race.sessions.fp1} />
                             </span>
                           )}
-                          <span>{formatSessionTime(nextSession.race.sessions.fp1, useLocal)}</span>
+                          <span className="hidden sm:inline text-[11px] sm:text-sm break-all">{formatSessionTime(nextSession.race.sessions.fp1, useLocal)}</span>
+                          <span className="sm:hidden text-[11px]">{formatSessionTimeCompact(nextSession.race.sessions.fp1, useLocal)}</span>
                         </div>
                       </div>
                     )}
                     {nextSession.race.sessions.fp2 && (
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">FP2:</span>
-                        <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                        <span className="font-medium shrink-0">FP2:</span>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
                           {new Date(nextSession.race.sessions.fp2).getTime() > Date.now() && (
-                            <span className="text-primary font-mono text-xs">
+                            <span className="text-primary font-mono text-[10px] sm:text-xs shrink-0">
                               <Countdown utcISO={nextSession.race.sessions.fp2} />
                             </span>
                           )}
-                          <span>{formatSessionTime(nextSession.race.sessions.fp2, useLocal)}</span>
+                          <span className="hidden sm:inline text-[11px] sm:text-sm break-all">{formatSessionTime(nextSession.race.sessions.fp2, useLocal)}</span>
+                          <span className="sm:hidden text-[11px]">{formatSessionTimeCompact(nextSession.race.sessions.fp2, useLocal)}</span>
                         </div>
                       </div>
                     )}
                     {nextSession.race.sessions.fp3 && (
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">FP3:</span>
-                        <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                        <span className="font-medium shrink-0">FP3:</span>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
                           {new Date(nextSession.race.sessions.fp3).getTime() > Date.now() && (
-                            <span className="text-primary font-mono text-xs">
+                            <span className="text-primary font-mono text-[10px] sm:text-xs shrink-0">
                               <Countdown utcISO={nextSession.race.sessions.fp3} />
                             </span>
                           )}
-                          <span>{formatSessionTime(nextSession.race.sessions.fp3, useLocal)}</span>
+                          <span className="hidden sm:inline text-[11px] sm:text-sm break-all">{formatSessionTime(nextSession.race.sessions.fp3, useLocal)}</span>
+                          <span className="sm:hidden text-[11px]">{formatSessionTimeCompact(nextSession.race.sessions.fp3, useLocal)}</span>
                         </div>
                       </div>
                     )}
                     {nextSession.race.sessions.sprint && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-orange-500 font-medium">Sprint:</span>
-                        <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                        <span className="text-orange-500 font-medium shrink-0">Sprint:</span>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
                           {new Date(nextSession.race.sessions.sprint).getTime() > Date.now() && (
-                            <span className="text-primary font-mono text-xs">
+                            <span className="text-primary font-mono text-[10px] sm:text-xs shrink-0">
                               <Countdown utcISO={nextSession.race.sessions.sprint} />
                             </span>
                           )}
-                          <span>{formatSessionTime(nextSession.race.sessions.sprint, useLocal)}</span>
+                          <span className="hidden sm:inline text-[11px] sm:text-sm break-all">{formatSessionTime(nextSession.race.sessions.sprint, useLocal)}</span>
+                          <span className="sm:hidden text-[11px]">{formatSessionTimeCompact(nextSession.race.sessions.sprint, useLocal)}</span>
                         </div>
                       </div>
                     )}
                     {nextSession.race.sessions.qualifying && (
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">Qualifying:</span>
-                        <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                        <span className="font-medium shrink-0">Qualifying:</span>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
                           {new Date(nextSession.race.sessions.qualifying).getTime() > Date.now() && (
-                            <span className="text-primary font-mono text-xs">
+                            <span className="text-primary font-mono text-[10px] sm:text-xs shrink-0">
                               <Countdown utcISO={nextSession.race.sessions.qualifying} />
                             </span>
                           )}
-                          <span>{formatSessionTime(nextSession.race.sessions.qualifying, useLocal)}</span>
+                          <span className="hidden sm:inline text-[11px] sm:text-sm break-all">{formatSessionTime(nextSession.race.sessions.qualifying, useLocal)}</span>
+                          <span className="sm:hidden text-[11px]">{formatSessionTimeCompact(nextSession.race.sessions.qualifying, useLocal)}</span>
                         </div>
                       </div>
                     )}
                     {nextSession.race.utcStart && (
-                      <div className="flex justify-between items-center">
-                        <span className="font-semibold">Race:</span>
-                        <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                        <span className="font-semibold shrink-0">Race:</span>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
                           {new Date(nextSession.race.utcStart).getTime() > Date.now() && (
-                            <span className="text-primary font-mono text-xs">
+                            <span className="text-primary font-mono text-[10px] sm:text-xs shrink-0">
                               <Countdown utcISO={nextSession.race.utcStart} />
                             </span>
                           )}
-                          <span>{formatSessionTime(nextSession.race.utcStart, useLocal)}</span>
+                          <span className="hidden sm:inline text-[11px] sm:text-sm break-all">{formatSessionTime(nextSession.race.utcStart, useLocal)}</span>
+                          <span className="sm:hidden text-[11px]">{formatSessionTimeCompact(nextSession.race.utcStart, useLocal)}</span>
                         </div>
                       </div>
                     )}
