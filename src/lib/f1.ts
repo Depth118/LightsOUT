@@ -49,6 +49,13 @@ export type NormalizedRace = {
   city: string;
   round: number;
   utcStart: string | null; // ISO string in UTC
+  sessions: {
+    fp1?: string | null;
+    fp2?: string | null;
+    fp3?: string | null;
+    qualifying?: string | null;
+    sprint?: string | null;
+  };
 };
 
 export async function fetchCurrentSeasonSchedule(): Promise<NormalizedRace[]> {
@@ -64,6 +71,22 @@ export async function fetchCurrentSeasonSchedule(): Promise<NormalizedRace[]> {
   const races = data?.MRData?.RaceTable?.Races ?? [];
   return races.map((r) => {
     const dt = parseErgastDate(r.date, r.time ?? undefined);
+    const fp1 = r.FirstPractice
+      ? parseErgastDate(r.FirstPractice.date, r.FirstPractice.time)
+      : null;
+    const fp2 = r.SecondPractice
+      ? parseErgastDate(r.SecondPractice.date, r.SecondPractice.time)
+      : null;
+    const fp3 = r.ThirdPractice
+      ? parseErgastDate(r.ThirdPractice.date, r.ThirdPractice.time)
+      : null;
+    const qualifying = r.Qualifying
+      ? parseErgastDate(r.Qualifying.date, r.Qualifying.time)
+      : null;
+    const sprint = r.Sprint
+      ? parseErgastDate(r.Sprint.date, r.Sprint.time)
+      : null;
+
     return {
       id: `${r.season}-${r.round}`,
       name: r.raceName,
@@ -72,6 +95,13 @@ export async function fetchCurrentSeasonSchedule(): Promise<NormalizedRace[]> {
       city: r.Circuit.Location.locality,
       round: Number(r.round),
       utcStart: dt ? dt.toISOString() : null,
+      sessions: {
+        fp1: fp1 ? fp1.toISOString() : null,
+        fp2: fp2 ? fp2.toISOString() : null,
+        fp3: fp3 ? fp3.toISOString() : null,
+        qualifying: qualifying ? qualifying.toISOString() : null,
+        sprint: sprint ? sprint.toISOString() : null,
+      },
     } satisfies NormalizedRace;
   });
 }
