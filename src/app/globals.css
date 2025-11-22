@@ -9,6 +9,7 @@
   font-style: normal;
   font-display: swap;
 }
+
 @font-face {
   font-family: "F1 Regular";
   src: url("/fonts/Formula1-Regular_web_0.ttf") format("truetype");
@@ -16,6 +17,7 @@
   font-style: normal;
   font-display: swap;
 }
+
 @font-face {
   font-family: "F1 Black";
   src: url("/fonts/Formula1-Black.ttf") format("truetype");
@@ -28,14 +30,21 @@
 .font-display {
   font-family: "F1 Regular", var(--font-geist-sans);
 }
+
 .font-f1 {
   font-family: "F1 Regular", var(--font-geist-sans);
 }
+
 .font-torque {
   font-family: "F1 Bold", var(--font-geist-sans);
 }
+
 .font-logo {
   font-family: "F1 Black", var(--font-geist-sans);
+}
+
+.font-simple-life {
+  font-family: var(--font-simple-life);
 }
 
 @custom-variant dark (&:is(.dark *));
@@ -155,7 +164,35 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--muted-foreground);
+  opacity: 0.5;
+  border-radius: 5px;
+  border: 2px solid var(--background);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted-foreground) transparent;
 }

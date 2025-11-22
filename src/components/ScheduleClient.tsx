@@ -1,6 +1,7 @@
+
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import type { NormalizedRace } from "@/lib/f1";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,40 +17,44 @@ import {
 } from "@/components/ui/table";
 import Countdown from "@/components/Countdown";
 import { RaceCard } from "@/components/RaceCard";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Trophy } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ResultsModal } from "@/components/ResultsModal";
 
-function toDisplay(dtISO: string, useLocal: boolean) {
+function toDisplay(dtISO: string, use24Hour: boolean) {
   const d = new Date(dtISO);
-  return useLocal ? d.toLocaleString() : d.toUTCString();
+  return d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: !use24Hour
+  });
 }
 
-function formatSessionTime(isoString: string | null | undefined, useLocal: boolean): string {
+function formatSessionTime(isoString: string | null | undefined, use24Hour: boolean): string {
   if (!isoString) return "";
   const date = new Date(isoString);
-  return useLocal ? date.toLocaleString() : date.toUTCString();
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: !use24Hour
+  });
 }
 
-function formatSessionTimeCompact(isoString: string | null | undefined, useLocal: boolean): string {
+function formatSessionTimeCompact(isoString: string | null | undefined, use24Hour: boolean): string {
   if (!isoString) return "";
   const date = new Date(isoString);
 
-  if (useLocal) {
-    // Format: "Nov 21, 3:30 PM"
-    return date.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-  } else {
-    // Format: "Nov 21, 15:30 UTC"
-    const month = date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
-    const day = date.getUTCDate();
-    const hours = String(date.getUTCHours()).padStart(2, '0');
-    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
-    return `${month} ${day}, ${hours}:${minutes} UTC`;
-  }
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: !use24Hour
+  });
 }
 
 
@@ -66,11 +71,11 @@ function getNextSession(races: NormalizedRace[]): NextSession | null {
 
   for (const race of races) {
     const sessions = [
-      { name: "FP1", time: race.sessions.fp1 },
-      { name: "FP2", time: race.sessions.fp2 },
-      { name: "FP3", time: race.sessions.fp3 },
-      { name: "Qualifying", time: race.sessions.qualifying },
-      { name: "Sprint", time: race.sessions.sprint },
+      { name: "FP1", time: race.sessions.fp1.time },
+      { name: "FP2", time: race.sessions.fp2.time },
+      { name: "FP3", time: race.sessions.fp3.time },
+      { name: "Qualifying", time: race.sessions.qualifying.time },
+      { name: "Sprint", time: race.sessions.sprint.time },
       { name: "Race", time: race.utcStart },
     ];
 
@@ -94,9 +99,43 @@ function getNextSession(races: NormalizedRace[]): NextSession | null {
 
 export default function ScheduleClient({ races }: { races: NormalizedRace[] }) {
   const [query, setQuery] = useState("");
-  const [useLocal, setUseLocal] = useState(false);
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  // Default to 12h (false) initially to match server/default, updated by effect
+  const [use24Hour, setUse24Hour] = useState(false);
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [showWeekendSchedule, setShowWeekendSchedule] = useState(false);
+  const [showLatestResults, setShowLatestResults] = useState(false);
+  const [selectedSessionKey, setSelectedSessionKey] = useState<number | null>(null);
+  const [selectedRace, setSelectedRace] = useState<NormalizedRace | null>(null);
+
+  // Load preference on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("use24Hour");
+    if (saved !== null) {
+      setUse24Hour(saved === "true");
+    }
+  }, []);
+
+  // Save preference on change
+  const handleTimeToggle = (checked: boolean) => {
+    setUse24Hour(checked);
+    localStorage.setItem("use24Hour", String(checked));
+  };
+
+  const openResults = (key: number | null, race: NormalizedRace) => {
+    if (key) {
+      setSelectedSessionKey(key);
+      setSelectedRace(race);
+      setShowLatestResults(true);
+    }
+  };
+
+  console.log("ScheduleClient races prop length:", races.length);
+  const vegasRace = races.find(r => r.name.includes("Las Vegas"));
+  if (vegasRace) {
+    console.log("Client Vegas sessions:", vegasRace.sessions);
+  } else {
+    console.log("Client Vegas race NOT found");
+  }
 
   const next = useMemo(() => {
     return races
@@ -107,6 +146,47 @@ export default function ScheduleClient({ races }: { races: NormalizedRace[] }) {
         (a, b) =>
           new Date(a.utcStart!).getTime() - new Date(b.utcStart!).getTime()
       )[0];
+  }, [races]);
+
+  const lastSession = useMemo(() => {
+    const now = Date.now();
+    let latest: {
+      race: NormalizedRace;
+      sessionName: string;
+      key: number;
+      time: number;
+    } | null = null;
+
+    for (const race of races) {
+      const sessions = [
+        { name: "Practice 1", data: race.sessions.fp1 },
+        { name: "Practice 2", data: race.sessions.fp2 },
+        { name: "Practice 3", data: race.sessions.fp3 },
+        { name: "Sprint", data: race.sessions.sprint },
+        { name: "Qualifying", data: race.sessions.qualifying },
+        { name: "Race", data: race.sessions.race },
+      ];
+
+      for (const session of sessions) {
+        if (session.data?.time && session.data.key) {
+          const time = new Date(session.data.time).getTime();
+          // Assume session is finished 2 hours after start
+          const endTime = time + 2 * 60 * 60 * 1000;
+
+          if (now > endTime) {
+            if (!latest || time > latest.time) {
+              latest = {
+                race,
+                sessionName: session.name,
+                key: session.data.key,
+                time,
+              };
+            }
+          }
+        }
+      }
+    }
+    return latest;
   }, [races]);
 
   const nextSession = useMemo(() => getNextSession(races), [races]);
@@ -123,15 +203,7 @@ export default function ScheduleClient({ races }: { races: NormalizedRace[] }) {
   }, [races, query]);
 
   const toggleRow = (id: string) => {
-    setExpandedRows((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
-      return newSet;
-    });
+    setExpandedRowId((prev) => (prev === id ? null : id));
   };
 
   return (
@@ -163,110 +235,157 @@ export default function ScheduleClient({ races }: { races: NormalizedRace[] }) {
                   <Countdown utcISO={nextSession.time} />
                 </div>
                 <div className="text-[11px] sm:text-xs text-muted-foreground mt-3">
-                  {toDisplay(nextSession.time, useLocal)}
+                  {toDisplay(nextSession.time, use24Hour)}
                 </div>
               </div>
             </div>
           </CardHeader>
           {/* Show all upcoming sessions for this race */}
-          {(nextSession.race.sessions.fp1 || nextSession.race.sessions.fp2 || nextSession.race.sessions.fp3 || nextSession.race.sessions.qualifying || nextSession.race.sessions.sprint) && (
+          {(nextSession.race.sessions.fp1.time || nextSession.race.sessions.fp2.time || nextSession.race.sessions.fp3.time || nextSession.race.sessions.qualifying.time || nextSession.race.sessions.sprint.time) && (
             <CardContent className={showWeekendSchedule ? "pt-0 pb-4" : "pt-0 pb-0"}>
-              <div className={showWeekendSchedule ? "border-t border-primary/20 pt-3" : "border-t border-primary/20 pt-2"}>
-                <button
-                  onClick={() => setShowWeekendSchedule(!showWeekendSchedule)}
-                  className="flex items-center gap-2 text-base font-semibold text-foreground/80 hover:text-foreground transition-colors"
-                >
-                  <span>Weekend Schedule</span>
-                  {showWeekendSchedule ? (
-                    <ChevronUp className="h-4 w-4" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4" />
-                  )}
-                </button>
+              <div className={showWeekendSchedule ? "border-t border-primary/20 pt-4" : "border-t border-primary/20 pt-4"}>
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={() => setShowWeekendSchedule(!showWeekendSchedule)}
+                    className="flex items-center gap-2 text-base font-semibold text-foreground/80 hover:text-foreground transition-colors"
+                  >
+                    <span>Weekend Schedule</span>
+                    {showWeekendSchedule ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </button>
+
+                  {/* View Results Button if sessions are finished */}
+                  {(() => {
+                    const sessions = [
+                      { name: "Race", data: nextSession.race.sessions.race },
+                      { name: "Qualifying", data: nextSession.race.sessions.qualifying },
+                      { name: "Sprint", data: nextSession.race.sessions.sprint },
+                      { name: "Practice 3", data: nextSession.race.sessions.fp3 },
+                      { name: "Practice 2", data: nextSession.race.sessions.fp2 },
+                      { name: "Practice 1", data: nextSession.race.sessions.fp1 }
+                    ];
+                    // Helper to check if session is finished
+                    const isFinished = (isoString: string | null) => {
+                      if (!isoString) return false;
+                      const endTime = new Date(new Date(isoString).getTime() + 2 * 60 * 60 * 1000);
+                      return new Date() > endTime;
+                    };
+                    const latestFinished = sessions.find(s => isFinished(s.data.time));
+
+                    if (latestFinished && latestFinished.data.key) {
+                      // Map internal session names to display names if needed
+                      const displayName = latestFinished.name === "Practice 1" ? "FP1" :
+                        latestFinished.name === "Practice 2" ? "FP2" :
+                          latestFinished.name === "Practice 3" ? "FP3" :
+                            latestFinished.name;
+
+                      return (
+                        <Button
+                          onClick={() => openResults(latestFinished.data.key, nextSession.race)}
+                          variant="secondary"
+                          size="sm"
+                          className="gap-2 h-8"
+                        >
+                          <Trophy className="h-3.5 w-3.5" />
+                          View {displayName} Results
+                        </Button>
+                      );
+                    } return null;
+                  })()}
+                </div>
 
                 {showWeekendSchedule && (
-                  <div className="text-xs sm:text-sm text-muted-foreground space-y-1.5 mt-2">
-                    {nextSession.race.sessions.fp1 && (
-                      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-                        <span className="font-medium shrink-0">FP1:</span>
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
-                          {new Date(nextSession.race.sessions.fp1).getTime() > Date.now() && (
-                            <span className="text-primary font-mono text-[10px] sm:text-xs shrink-0">
-                              <Countdown utcISO={nextSession.race.sessions.fp1} />
-                            </span>
-                          )}
-                          <span className="hidden sm:inline text-[11px] sm:text-sm break-all">{formatSessionTime(nextSession.race.sessions.fp1, useLocal)}</span>
-                          <span className="sm:hidden text-[11px]">{formatSessionTimeCompact(nextSession.race.sessions.fp1, useLocal)}</span>
+                  <div className="space-y-2 mt-3">
+                    {nextSession.race.sessions.fp1.time && (
+                      <div className="group bg-muted/50 hover:bg-muted/70 rounded-lg p-2.5 transition-colors border border-border">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-xs font-semibold text-foreground/90">FP1</span>
+                          <div className="flex items-center gap-2 min-w-0">
+                            {new Date(nextSession.race.sessions.fp1.time).getTime() > Date.now() && (
+                              <span className="text-primary font-mono text-[10px] sm:text-xs font-medium shrink-0 bg-primary/10 px-1.5 py-0.5 rounded">
+                                <Countdown utcISO={nextSession.race.sessions.fp1.time} />
+                              </span>
+                            )}
+                            <span className="text-xs text-muted-foreground font-medium">{formatSessionTimeCompact(nextSession.race.sessions.fp1.time, use24Hour)}</span>
+                          </div>
                         </div>
                       </div>
                     )}
-                    {nextSession.race.sessions.fp2 && (
-                      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-                        <span className="font-medium shrink-0">FP2:</span>
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
-                          {new Date(nextSession.race.sessions.fp2).getTime() > Date.now() && (
-                            <span className="text-primary font-mono text-[10px] sm:text-xs shrink-0">
-                              <Countdown utcISO={nextSession.race.sessions.fp2} />
-                            </span>
-                          )}
-                          <span className="hidden sm:inline text-[11px] sm:text-sm break-all">{formatSessionTime(nextSession.race.sessions.fp2, useLocal)}</span>
-                          <span className="sm:hidden text-[11px]">{formatSessionTimeCompact(nextSession.race.sessions.fp2, useLocal)}</span>
+                    {nextSession.race.sessions.fp2.time && (
+                      <div className="group bg-muted/50 hover:bg-muted/70 rounded-lg p-2.5 transition-colors border border-border">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-xs font-semibold text-foreground/90">FP2</span>
+                          <div className="flex items-center gap-2 min-w-0">
+                            {new Date(nextSession.race.sessions.fp2.time).getTime() > Date.now() && (
+                              <span className="text-primary font-mono text-[10px] sm:text-xs font-medium shrink-0 bg-primary/10 px-1.5 py-0.5 rounded">
+                                <Countdown utcISO={nextSession.race.sessions.fp2.time} />
+                              </span>
+                            )}
+                            <span className="text-xs text-muted-foreground font-medium">{formatSessionTimeCompact(nextSession.race.sessions.fp2.time, use24Hour)}</span>
+                          </div>
                         </div>
                       </div>
                     )}
-                    {nextSession.race.sessions.fp3 && (
-                      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-                        <span className="font-medium shrink-0">FP3:</span>
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
-                          {new Date(nextSession.race.sessions.fp3).getTime() > Date.now() && (
-                            <span className="text-primary font-mono text-[10px] sm:text-xs shrink-0">
-                              <Countdown utcISO={nextSession.race.sessions.fp3} />
-                            </span>
-                          )}
-                          <span className="hidden sm:inline text-[11px] sm:text-sm break-all">{formatSessionTime(nextSession.race.sessions.fp3, useLocal)}</span>
-                          <span className="sm:hidden text-[11px]">{formatSessionTimeCompact(nextSession.race.sessions.fp3, useLocal)}</span>
+                    {nextSession.race.sessions.fp3.time && (
+                      <div className="group bg-muted/50 hover:bg-muted/70 rounded-lg p-2.5 transition-colors border border-border">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-xs font-semibold text-foreground/90">FP3</span>
+                          <div className="flex items-center gap-2 min-w-0">
+                            {new Date(nextSession.race.sessions.fp3.time).getTime() > Date.now() && (
+                              <span className="text-primary font-mono text-[10px] sm:text-xs font-medium shrink-0 bg-primary/10 px-1.5 py-0.5 rounded">
+                                <Countdown utcISO={nextSession.race.sessions.fp3.time} />
+                              </span>
+                            )}
+                            <span className="text-xs text-muted-foreground font-medium">{formatSessionTimeCompact(nextSession.race.sessions.fp3.time, use24Hour)}</span>
+                          </div>
                         </div>
                       </div>
                     )}
-                    {nextSession.race.sessions.sprint && (
-                      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-                        <span className="text-orange-500 font-medium shrink-0">Sprint:</span>
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
-                          {new Date(nextSession.race.sessions.sprint).getTime() > Date.now() && (
-                            <span className="text-primary font-mono text-[10px] sm:text-xs shrink-0">
-                              <Countdown utcISO={nextSession.race.sessions.sprint} />
-                            </span>
-                          )}
-                          <span className="hidden sm:inline text-[11px] sm:text-sm break-all">{formatSessionTime(nextSession.race.sessions.sprint, useLocal)}</span>
-                          <span className="sm:hidden text-[11px]">{formatSessionTimeCompact(nextSession.race.sessions.sprint, useLocal)}</span>
+                    {nextSession.race.sessions.sprint.time && (
+                      <div className="group bg-orange-500/10 hover:bg-orange-500/20 rounded-lg p-2.5 transition-colors border border-orange-500/30">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-xs font-semibold text-orange-500">Sprint</span>
+                          <div className="flex items-center gap-2 min-w-0">
+                            {new Date(nextSession.race.sessions.sprint.time).getTime() > Date.now() && (
+                              <span className="text-orange-500 font-mono text-[10px] sm:text-xs font-medium shrink-0 bg-orange-500/10 px-1.5 py-0.5 rounded">
+                                <Countdown utcISO={nextSession.race.sessions.sprint.time} />
+                              </span>
+                            )}
+                            <span className="text-xs text-muted-foreground font-medium">{formatSessionTimeCompact(nextSession.race.sessions.sprint.time, use24Hour)}</span>
+                          </div>
                         </div>
                       </div>
                     )}
-                    {nextSession.race.sessions.qualifying && (
-                      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-                        <span className="font-medium shrink-0">Qualifying:</span>
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
-                          {new Date(nextSession.race.sessions.qualifying).getTime() > Date.now() && (
-                            <span className="text-primary font-mono text-[10px] sm:text-xs shrink-0">
-                              <Countdown utcISO={nextSession.race.sessions.qualifying} />
-                            </span>
-                          )}
-                          <span className="hidden sm:inline text-[11px] sm:text-sm break-all">{formatSessionTime(nextSession.race.sessions.qualifying, useLocal)}</span>
-                          <span className="sm:hidden text-[11px]">{formatSessionTimeCompact(nextSession.race.sessions.qualifying, useLocal)}</span>
+                    {nextSession.race.sessions.qualifying.time && (
+                      <div className="group bg-blue-500/10 hover:bg-blue-500/20 rounded-lg p-2.5 transition-colors border border-blue-500/30">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-xs font-semibold text-blue-500">Qualifying</span>
+                          <div className="flex items-center gap-2 min-w-0">
+                            {new Date(nextSession.race.sessions.qualifying.time).getTime() > Date.now() && (
+                              <span className="text-blue-500 font-mono text-[10px] sm:text-xs font-medium shrink-0 bg-blue-500/10 px-1.5 py-0.5 rounded">
+                                <Countdown utcISO={nextSession.race.sessions.qualifying.time} />
+                              </span>
+                            )}
+                            <span className="text-xs text-muted-foreground font-medium">{formatSessionTimeCompact(nextSession.race.sessions.qualifying.time, use24Hour)}</span>
+                          </div>
                         </div>
                       </div>
                     )}
                     {nextSession.race.utcStart && (
-                      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-                        <span className="font-semibold shrink-0">Race:</span>
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
-                          {new Date(nextSession.race.utcStart).getTime() > Date.now() && (
-                            <span className="text-primary font-mono text-[10px] sm:text-xs shrink-0">
-                              <Countdown utcISO={nextSession.race.utcStart} />
-                            </span>
-                          )}
-                          <span className="hidden sm:inline text-[11px] sm:text-sm break-all">{formatSessionTime(nextSession.race.utcStart, useLocal)}</span>
-                          <span className="sm:hidden text-[11px]">{formatSessionTimeCompact(nextSession.race.utcStart, useLocal)}</span>
+                      <div className="group bg-primary/10 hover:bg-primary/20 rounded-lg p-2.5 transition-colors border border-primary/30">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-xs font-bold text-primary">Race</span>
+                          <div className="flex items-center gap-2 min-w-0">
+                            {new Date(nextSession.race.utcStart).getTime() > Date.now() && (
+                              <span className="text-primary font-mono text-[10px] sm:text-xs font-medium shrink-0 bg-primary/20 px-1.5 py-0.5 rounded">
+                                <Countdown utcISO={nextSession.race.utcStart} />
+                              </span>
+                            )}
+                            <span className="text-xs text-foreground/80 font-medium">{formatSessionTimeCompact(nextSession.race.utcStart, use24Hour)}</span>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -278,6 +397,14 @@ export default function ScheduleClient({ races }: { races: NormalizedRace[] }) {
         </Card>
       )}
 
+      {/* Results Modal (rendered once at root level) */}
+      <ResultsModal
+        isOpen={showLatestResults}
+        onClose={() => setShowLatestResults(false)}
+        race={selectedRace || (lastSession ? lastSession.race : null)}
+        initialSessionKey={selectedSessionKey || (lastSession ? lastSession.key : null)}
+      />
+
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         <Input
           placeholder="Search race, circuit or location"
@@ -286,8 +413,8 @@ export default function ScheduleClient({ races }: { races: NormalizedRace[] }) {
           className="sm:max-w-sm"
         />
         <div className="inline-flex items-center gap-2">
-          <Switch id="tz" checked={useLocal} onCheckedChange={setUseLocal} />
-          <Label htmlFor="tz">Show local time</Label>
+          <Switch id="tz" checked={use24Hour} onCheckedChange={handleTimeToggle} />
+          <Label htmlFor="tz">24-hour clock</Label>
         </div>
       </div>
 
@@ -300,14 +427,8 @@ export default function ScheduleClient({ races }: { races: NormalizedRace[] }) {
             {filtered.map((r) => (
               <RaceCard
                 key={r.id}
-                title={r.name}
-                round={r.round}
-                circuit={r.circuit}
-                city={r.city}
-                country={r.country}
-                when={r.utcStart ? toDisplay(r.utcStart, useLocal) : null}
+                race={r}
                 isNext={next?.id === r.id}
-                sessions={r.sessions}
               />
             ))}
           </div>
@@ -320,24 +441,31 @@ export default function ScheduleClient({ races }: { races: NormalizedRace[] }) {
                   <TableHead>Race</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead className="text-right">
-                    {useLocal ? "Local" : "UTC"}
+                    Time
                   </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((r) => {
-                  const isExpanded = expandedRows.has(r.id);
-                  const hasSessions = r.sessions.fp1 || r.sessions.fp2 || r.sessions.fp3 || r.sessions.qualifying || r.sessions.sprint;
+                  const isExpanded = expandedRowId === r.id;
+                  const hasSessions = r.sessions.fp1.time || r.sessions.fp2.time || r.sessions.fp3.time || r.sessions.qualifying.time || r.sessions.sprint.time;
+
+                  // Helper to check if session is finished
+                  const isFinished = (isoString: string | null) => {
+                    if (!isoString) return false;
+                    const endTime = new Date(new Date(isoString).getTime() + 2 * 60 * 60 * 1000);
+                    return new Date() > endTime;
+                  };
 
                   return (
                     <React.Fragment key={r.id}>
                       <TableRow
-                        className={next?.id === r.id ? "bg-primary/5" : undefined}
+                        className={`cursor-pointer hover:bg-muted/50 transition-colors ${next?.id === r.id ? "bg-primary/5" : ""}`}
+                        onClick={() => hasSessions && toggleRow(r.id)}
                       >
                         <TableCell>
                           {hasSessions && (
                             <button
-                              onClick={() => toggleRow(r.id)}
                               className="text-muted-foreground hover:text-foreground transition-colors"
                             >
                               {isExpanded ? (
@@ -357,85 +485,140 @@ export default function ScheduleClient({ races }: { races: NormalizedRace[] }) {
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
-                          {r.utcStart ? toDisplay(r.utcStart, useLocal) : "TBD"}
+                          {r.utcStart ? toDisplay(r.utcStart, use24Hour) : "TBD"}
                         </TableCell>
                       </TableRow>
                       {isExpanded && hasSessions && (
                         <TableRow key={`${r.id}-sessions`}>
-                          <TableCell colSpan={5} className="bg-muted/30">
-                            <div className="py-2 px-4 space-y-2 text-sm">
-                              <div className="font-medium text-foreground/70">Sessions:</div>
-                              <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-xs text-muted-foreground">
-                                {r.sessions.fp1 && (
-                                  <div className="flex justify-between items-center">
-                                    <span className="font-medium">FP1:</span>
-                                    <div className="flex items-center gap-3">
-                                      {new Date(r.sessions.fp1).getTime() > Date.now() && (
-                                        <span className="text-primary font-mono text-[10px]">
-                                          <Countdown utcISO={r.sessions.fp1} />
-                                        </span>
-                                      )}
-                                      <span>{formatSessionTime(r.sessions.fp1, useLocal)}</span>
+                          <TableCell colSpan={5} className="bg-muted/20">
+                            <div className="py-3 px-4">
+                              <div className="grid grid-cols-1 gap-2">
+                                {r.sessions.fp1.time && (
+                                  <div className="group bg-muted/50 hover:bg-muted/70 rounded-lg p-2.5 transition-all border border-border hover:border-foreground/20">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-xs font-semibold text-foreground/90">FP1</span>
+                                      <div className="flex items-center gap-2">
+                                        {new Date(r.sessions.fp1.time).getTime() > Date.now() && (
+                                          <span className="text-primary font-mono text-[10px] font-medium bg-primary/10 px-1.5 py-0.5 rounded">
+                                            <Countdown utcISO={r.sessions.fp1.time} />
+                                          </span>
+                                        )}
+                                        <span className="text-xs text-muted-foreground font-medium">{formatSessionTimeCompact(r.sessions.fp1.time, use24Hour)}</span>
+                                      </div>
                                     </div>
                                   </div>
                                 )}
-                                {r.sessions.fp2 && (
-                                  <div className="flex justify-between items-center">
-                                    <span className="font-medium">FP2:</span>
-                                    <div className="flex items-center gap-3">
-                                      {new Date(r.sessions.fp2).getTime() > Date.now() && (
-                                        <span className="text-primary font-mono text-[10px]">
-                                          <Countdown utcISO={r.sessions.fp2} />
-                                        </span>
-                                      )}
-                                      <span>{formatSessionTime(r.sessions.fp2, useLocal)}</span>
+                                {r.sessions.fp2.time && (
+                                  <div className="group bg-muted/50 hover:bg-muted/70 rounded-lg p-2.5 transition-all border border-border hover:border-foreground/20">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-xs font-semibold text-foreground/90">FP2</span>
+                                      <div className="flex items-center gap-2">
+                                        {new Date(r.sessions.fp2.time).getTime() > Date.now() && (
+                                          <span className="text-primary font-mono text-[10px] font-medium bg-primary/10 px-1.5 py-0.5 rounded">
+                                            <Countdown utcISO={r.sessions.fp2.time} />
+                                          </span>
+                                        )}
+                                        <span className="text-xs text-muted-foreground font-medium">{formatSessionTimeCompact(r.sessions.fp2.time, use24Hour)}</span>
+                                      </div>
                                     </div>
                                   </div>
                                 )}
-                                {r.sessions.fp3 && (
-                                  <div className="flex justify-between items-center">
-                                    <span className="font-medium">FP3:</span>
-                                    <div className="flex items-center gap-3">
-                                      {new Date(r.sessions.fp3).getTime() > Date.now() && (
-                                        <span className="text-primary font-mono text-[10px]">
-                                          <Countdown utcISO={r.sessions.fp3} />
-                                        </span>
-                                      )}
-                                      <span>{formatSessionTime(r.sessions.fp3, useLocal)}</span>
+                                {r.sessions.fp3.time && (
+                                  <div className="group bg-muted/50 hover:bg-muted/70 rounded-lg p-2.5 transition-all border border-border hover:border-foreground/20">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-xs font-semibold text-foreground/90">FP3</span>
+                                      <div className="flex items-center gap-2">
+                                        {new Date(r.sessions.fp3.time).getTime() > Date.now() && (
+                                          <span className="text-primary font-mono text-[10px] font-medium bg-primary/10 px-1.5 py-0.5 rounded">
+                                            <Countdown utcISO={r.sessions.fp3.time} />
+                                          </span>
+                                        )}
+                                        <span className="text-xs text-muted-foreground font-medium">{formatSessionTimeCompact(r.sessions.fp3.time, use24Hour)}</span>
+                                      </div>
                                     </div>
                                   </div>
                                 )}
-                                {r.sessions.sprint && (
-                                  <div className="flex justify-between items-center">
-                                    <span className="font-medium text-orange-500">Sprint:</span>
-                                    <div className="flex items-center gap-3">
-                                      {new Date(r.sessions.sprint).getTime() > Date.now() && (
-                                        <span className="text-primary font-mono text-[10px]">
-                                          <Countdown utcISO={r.sessions.sprint} />
-                                        </span>
-                                      )}
-                                      <span>{formatSessionTime(r.sessions.sprint, useLocal)}</span>
+                                {r.sessions.sprint.time && (
+                                  <div className="group bg-orange-500/10 hover:bg-orange-500/20 rounded-lg p-2.5 transition-all border border-orange-500/30 hover:border-orange-500/50">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-xs font-semibold text-orange-500">Sprint</span>
+                                      <div className="flex items-center gap-2">
+                                        {new Date(r.sessions.sprint.time).getTime() > Date.now() && (
+                                          <span className="text-orange-500 font-mono text-[10px] font-medium bg-orange-500/10 px-1.5 py-0.5 rounded">
+                                            <Countdown utcISO={r.sessions.sprint.time} />
+                                          </span>
+                                        )}
+                                        <span className="text-xs text-muted-foreground font-medium">{formatSessionTimeCompact(r.sessions.sprint.time, use24Hour)}</span>
+                                      </div>
                                     </div>
                                   </div>
                                 )}
-                                {r.sessions.qualifying && (
-                                  <div className="flex justify-between items-center">
-                                    <span className="font-medium">Qualifying:</span>
-                                    <div className="flex items-center gap-3">
-                                      {new Date(r.sessions.qualifying).getTime() > Date.now() && (
-                                        <span className="text-primary font-mono text-[10px]">
-                                          <Countdown utcISO={r.sessions.qualifying} />
-                                        </span>
-                                      )}
-                                      <span>{formatSessionTime(r.sessions.qualifying, useLocal)}</span>
+                                {r.sessions.qualifying.time && (
+                                  <div className="group bg-blue-500/10 hover:bg-blue-500/20 rounded-lg p-2.5 transition-all border border-blue-500/30 hover:border-blue-500/50">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-xs font-semibold text-blue-500">Qualifying</span>
+                                      <div className="flex items-center gap-2">
+                                        {new Date(r.sessions.qualifying.time).getTime() > Date.now() && (
+                                          <span className="text-blue-500 font-mono text-[10px] font-medium bg-blue-500/10 px-1.5 py-0.5 rounded">
+                                            <Countdown utcISO={r.sessions.qualifying.time} />
+                                          </span>
+                                        )}
+                                        <span className="text-xs text-muted-foreground font-medium">{formatSessionTimeCompact(r.sessions.qualifying.time, use24Hour)}</span>
+                                      </div>
                                     </div>
                                   </div>
                                 )}
+                                {r.sessions.race.time && (
+                                  <div className="group bg-primary/10 hover:bg-primary/20 rounded-lg p-2.5 transition-all border border-primary/30 hover:border-primary/50">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-xs font-bold text-primary">Race</span>
+                                      <div className="flex items-center gap-2">
+                                        {new Date(r.sessions.race.time).getTime() > Date.now() && (
+                                          <span className="text-primary font-mono text-[10px] font-medium bg-primary/20 px-1.5 py-0.5 rounded">
+                                            <Countdown utcISO={r.sessions.race.time} />
+                                          </span>
+                                        )}
+                                        <span className="text-xs text-foreground/80 font-medium">{formatSessionTimeCompact(r.sessions.race.time, use24Hour)}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Main Results Button for Desktop */}
+                                {(() => {
+                                  const sessions = [
+                                    r.sessions.race,
+                                    r.sessions.qualifying,
+                                    r.sessions.sprint,
+                                    r.sessions.fp3,
+                                    r.sessions.fp2,
+                                    r.sessions.fp1
+                                  ];
+                                  const latestFinished = sessions.find(s => isFinished(s.time));
+
+                                  if (latestFinished && latestFinished.key) {
+                                    return (
+                                      <div className="pt-2 border-t border-primary/10 mt-2 flex justify-end">
+                                        <Button
+                                          className="gap-2"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => openResults(latestFinished.key, r)}
+                                        >
+                                          <Trophy className="h-4 w-4" />
+                                          View Results
+                                        </Button>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                               </div>
                             </div>
                           </TableCell>
                         </TableRow>
-                      )}
+                      )
+                      }
                     </React.Fragment>
                   );
                 })}
