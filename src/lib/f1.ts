@@ -334,3 +334,98 @@ export function getNextRace(
     );
   return upcoming[0] ?? null;
 }
+
+// --- Ergast API Types & Fetching ---
+
+export type DriverStanding = {
+  position: string;
+  points: string;
+  wins: string;
+  Driver: {
+    driverId: string;
+    permanentNumber: string;
+    code: string;
+    givenName: string;
+    familyName: string;
+    nationality: string;
+  };
+  Constructors: {
+    constructorId: string;
+    url: string;
+    name: string;
+    nationality: string;
+  }[];
+};
+
+export type ConstructorStanding = {
+  position: string;
+  positionText: string;
+  points: string;
+  wins: string;
+  Constructor: {
+    constructorId: string;
+    url: string;
+    name: string;
+    nationality: string;
+  };
+};
+
+export async function fetchDriverStandings(): Promise<DriverStanding[]> {
+  try {
+    const res = await fetch("https://api.jolpi.ca/ergast/f1/current/driverStandings.json", {
+      next: { revalidate: 3600 },
+    });
+
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    return data.MRData.StandingsTable.StandingsLists[0]?.DriverStandings || [];
+  } catch (error) {
+    console.error("Failed to fetch driver standings:", error);
+    return [];
+  }
+}
+
+export async function fetchConstructorStandings(): Promise<ConstructorStanding[]> {
+  try {
+    const res = await fetch("https://api.jolpi.ca/ergast/f1/current/constructorStandings.json", {
+      next: { revalidate: 3600 },
+    });
+
+    if (!res.ok) {
+      throw new Error("Failed to fetch constructor standings");
+    }
+
+    const data = await res.json();
+    return data.MRData.StandingsTable.StandingsLists[0]?.ConstructorStandings || [];
+  } catch (error) {
+    console.error("Error fetching constructor standings:", error);
+    return [];
+  }
+}
+
+export async function fetchDriverImages(): Promise<Record<string, string>> {
+  try {
+    const res = await fetch("https://api.openf1.org/v1/drivers?session_key=latest", {
+      next: { revalidate: 86400 }, // Cache for 24 hours
+    });
+
+    if (!res.ok) {
+      throw new Error("Failed to fetch driver images");
+    }
+
+    const data = await res.json();
+    const imageMap: Record<string, string> = {};
+
+    data.forEach((driver: any) => {
+      if (driver.driver_number && driver.headshot_url) {
+        imageMap[driver.driver_number.toString()] = driver.headshot_url;
+      }
+    });
+
+    return imageMap;
+  } catch (error) {
+    console.error("Error fetching driver images:", error);
+    return {};
+  }
+}

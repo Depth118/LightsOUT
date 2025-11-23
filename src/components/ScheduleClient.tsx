@@ -1,8 +1,7 @@
-
 "use client";
 
 import React, { useMemo, useState, useEffect } from "react";
-import type { NormalizedRace } from "@/lib/f1";
+import type { NormalizedRace, DriverStanding, ConstructorStanding } from "@/lib/f1";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -17,9 +16,11 @@ import {
 } from "@/components/ui/table";
 import Countdown from "@/components/Countdown";
 import { RaceCard } from "@/components/RaceCard";
-import { ChevronDown, ChevronUp, Trophy } from "lucide-react";
+import { ChevronDown, ChevronUp, Trophy, BarChart2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ResultsModal } from "@/components/ResultsModal";
+import Leaderboard from "@/components/Leaderboard";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 function toDisplay(dtISO: string, use24Hour: boolean) {
   const d = new Date(dtISO);
@@ -97,7 +98,19 @@ function getNextSession(races: NormalizedRace[]): NextSession | null {
   return nextSession;
 }
 
-export default function ScheduleClient({ races }: { races: NormalizedRace[] }) {
+interface ScheduleClientProps {
+  races: NormalizedRace[];
+  driverStandings?: DriverStanding[];
+  constructorStandings?: ConstructorStanding[];
+  driverImages: Record<string, string>;
+}
+
+export default function ScheduleClient({
+  races,
+  driverStandings,
+  constructorStandings,
+  driverImages
+}: ScheduleClientProps) {
   const [query, setQuery] = useState("");
   // Default to 12h (false) initially to match server/default, updated by effect
   const [use24Hour, setUse24Hour] = useState(false);
@@ -106,6 +119,7 @@ export default function ScheduleClient({ races }: { races: NormalizedRace[] }) {
   const [showLatestResults, setShowLatestResults] = useState(false);
   const [selectedSessionKey, setSelectedSessionKey] = useState<number | null>(null);
   const [selectedRace, setSelectedRace] = useState<NormalizedRace | null>(null);
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
 
   // Load preference on mount
   useEffect(() => {
@@ -397,6 +411,41 @@ export default function ScheduleClient({ races }: { races: NormalizedRace[] }) {
         </Card>
       )}
 
+      {/* Mobile Leaderboard (Collapsible) */}
+      {driverStandings && constructorStandings && (
+        <div className="block lg:hidden">
+          <Collapsible
+            open={isLeaderboardOpen}
+            onOpenChange={setIsLeaderboardOpen}
+            className="w-full space-y-2"
+          >
+            <div className="flex items-center justify-between px-1">
+              <h3 className="text-lg font-semibold font-display flex items-center gap-2">
+                <BarChart2 className="h-5 w-5 text-primary" />
+                Championship Standings
+              </h3>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="w-9 p-0">
+                  {isLeaderboardOpen ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                  <span className="sr-only">Toggle Leaderboard</span>
+                </Button>
+              </CollapsibleTrigger>
+            </div>
+            <CollapsibleContent className="space-y-2">
+              <Leaderboard
+                driverStandings={driverStandings}
+                constructorStandings={constructorStandings}
+                driverImages={driverImages}
+              />
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
+      )}
+
       {/* Results Modal (rendered once at root level) */}
       <ResultsModal
         isOpen={showLatestResults}
@@ -627,6 +676,6 @@ export default function ScheduleClient({ races }: { races: NormalizedRace[] }) {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </div >
   );
 }
