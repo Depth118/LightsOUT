@@ -24,7 +24,6 @@ export const DRIVER_IMAGES: Record<string, string> = {
     "antonelli": "https://media.formula1.com/d_driver_fallback_image.png/content/dam/fom-website/drivers/driver_fallback_image.png",
     "hadjar": "https://media.formula1.com/d_driver_fallback_image.png/content/dam/fom-website/drivers/driver_fallback_image.png",
     "bortoleto": "https://media.formula1.com/d_driver_fallback_image.png/content/dam/fom-website/drivers/driver_fallback_image.png",
-    "lawson": "https://media.formula1.com/d_driver_fallback_image.png/content/dam/fom-website/drivers/driver_fallback_image.png",
 };
 
 export const DRIVER_TEAM_OVERRIDES: Record<string, string> = {
