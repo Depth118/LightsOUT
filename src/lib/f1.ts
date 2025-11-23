@@ -241,7 +241,8 @@ export async function fetchCurrentSeasonSchedule(): Promise<NormalizedRace[]> {
     // Check by name OR key to be robust
     if ((meeting.meeting_key === 1274 || meeting.meeting_name.includes("Las Vegas")) && meeting.year === 2025) {
       // Use dummy keys (negative) to allow UI to render buttons, even if API returns no data
-      if (!raceSession.time) raceSession = { time: "2025-11-23T06:00:00Z", key: -1 };
+      // Las Vegas race: 10:00 PM PST Nov 22 = 4:00 AM UTC Nov 23 = 9:30 AM IST Nov 23
+      if (!raceSession.time) raceSession = { time: "2025-11-23T04:00:00Z", key: -1 };
       if (!fp1.time) fp1 = { time: "2025-11-21T02:30:00Z", key: -2 };
       if (!fp2.time) fp2 = { time: "2025-11-21T06:00:00Z", key: -3 };
       if (!fp3.time) fp3 = { time: "2025-11-22T02:30:00Z", key: -4 };
