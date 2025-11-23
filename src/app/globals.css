@@ -196,3 +196,15 @@
   scrollbar-width: thin;
   scrollbar-color: var(--muted-foreground) transparent;
 }
+
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
