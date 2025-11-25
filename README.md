@@ -6,18 +6,12 @@ A clean, modern F1 race schedule web app with live countdowns and timezone-aware
 
 - **Live countdowns**: Real-time countdown to the next race
 - **Timezone support**: Toggle between local and UTC times
+- **Championship Standings**: See the championship standing of the ongoing season
+- **Session Results**: See the results of every session, even if it just ended
 - **Responsive design**: Optimized for mobile and desktop
 - **Search**: Find races by name, circuit, or location
 - **Premium UI**: Dark theme with F1 red accents
 - **Fast and clean**: Built with modern web technologies
-
-## Tech Stack
-
-- **Framework**: Next.js 15 with Turbopack
-- **Styling**: Tailwind CSS
-- **UI Components**: shadcn/ui
-- **Data**: Jolpica API (Ergast-compatible)
-- **Fonts**: Custom Formula 1 typography
 
 ## Getting Started
 
