@@ -24,7 +24,7 @@ export default function Leaderboard({
         <Card className="h-fit w-full border-sidebar-border bg-sidebar text-sidebar-foreground shadow-sm overflow-hidden">
             <CardHeader className="pb-3 border-b border-sidebar-border/50 bg-sidebar-accent/20">
                 <CardTitle className="font-display text-lg font-bold uppercase tracking-wider flex items-center gap-2">
-                    <span className="text-primary">2025</span> Standings
+                    <span className="text-primary">{new Date().getFullYear()}</span> Standings
                 </CardTitle>
                 <div className="flex w-full rounded-lg bg-muted/50 p-1 mt-4 border border-sidebar-border/50">
                     <button

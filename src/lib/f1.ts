@@ -78,6 +78,7 @@ export type NormalizedRace = {
     fp2: SessionInfo;
     fp3: SessionInfo;
     qualifying: SessionInfo;
+    sprintQualifying: SessionInfo;
     sprint: SessionInfo;
     race: SessionInfo;
   };
@@ -231,6 +232,8 @@ export async function fetchCurrentSeasonSchedule(): Promise<NormalizedRace[]> {
     let fp3 = findSession(/Practice 3/i);
     // Ensure Qualifying does not match "Sprint Qualifying"
     let qualifying = findSession(/^(?!.*Sprint).*Qualifying/i);
+    // Sprint Qualifying
+    let sprintQualifying = findSession(/Sprint.*Qualifying/i);
     // Ensure Sprint does not match "Sprint Qualifying" (matches "Sprint" or "Sprint Race")
     let sprint = findSession(/^Sprint(?!.*Qualifying)/i);
 
@@ -247,6 +250,18 @@ export async function fetchCurrentSeasonSchedule(): Promise<NormalizedRace[]> {
       if (!fp2.time) fp2 = { time: "2025-11-21T06:00:00Z", key: -3 };
       if (!fp3.time) fp3 = { time: "2025-11-22T02:30:00Z", key: -4 };
       if (!qualifying.time) qualifying = { time: "2025-11-22T06:00:00Z", key: -5 };
+      if (!sprintQualifying.time) sprintQualifying = { time: null, key: null }; // No sprint quali for Vegas
+    }
+
+    // Patch for Qatar 2025 if sessions are missing (API only returns FP1 as of late Nov 2025)
+    if ((meeting.meeting_key === 1275 || meeting.meeting_name.includes("Qatar")) && meeting.year === 2025) {
+      if (!raceSession.time) raceSession = { time: "2025-11-30T16:00:00Z", key: -10 };
+      // Sprint weekend structure
+      if (!sprint.time) sprint = { time: "2025-11-29T14:00:00Z", key: -12 };
+      if (!sprintQualifying.time) sprintQualifying = { time: "2025-11-28T17:30:00Z", key: -14 }; // Est time
+      if (!qualifying.time) qualifying = { time: "2025-11-29T18:00:00Z", key: -13 };
+      // Note: OpenF1 might not have a dedicated field for Sprint Qualifying in our NormalizedRace yet,
+      // but we ensure the main Race/Sprint/Quali are present so it doesn't disappear.
     }
 
     // Fallback to meeting start date if race session not found (though it should be there for valid races)
@@ -265,6 +280,7 @@ export async function fetchCurrentSeasonSchedule(): Promise<NormalizedRace[]> {
         fp2,
         fp3,
         qualifying,
+        sprintQualifying,
         sprint,
         race: raceSession
       },
@@ -287,7 +303,8 @@ export async function fetchCurrentSeasonSchedule(): Promise<NormalizedRace[]> {
         utcStart: "2025-11-30T16:00:00Z",
         sessions: {
           fp1: { time: "2025-11-28T13:30:00Z", key: null }, // Est
-          qualifying: { time: "2025-11-28T17:00:00Z", key: null }, // Sprint Quali
+          qualifying: { time: "2025-11-29T18:00:00Z", key: null }, // Sprint Quali
+          sprintQualifying: { time: "2025-11-28T17:30:00Z", key: null },
           sprint: { time: "2025-11-29T14:00:00Z", key: null },
           fp2: { time: null, key: null }, // Sprint weekend
           fp3: { time: null, key: null },
@@ -310,6 +327,7 @@ export async function fetchCurrentSeasonSchedule(): Promise<NormalizedRace[]> {
           fp2: { time: "2025-12-05T13:00:00Z", key: null }, // Est
           fp3: { time: "2025-12-06T10:30:00Z", key: null }, // Est
           qualifying: { time: "2025-12-06T14:00:00Z", key: null }, // Est
+          sprintQualifying: { time: null, key: null },
           sprint: { time: null, key: null },
           race: { time: "2025-12-07T13:00:00Z", key: null }
         }

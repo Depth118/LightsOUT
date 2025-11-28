@@ -76,6 +76,7 @@ function getNextSession(races: NormalizedRace[]): NextSession | null {
       { name: "FP2", time: race.sessions.fp2.time },
       { name: "FP3", time: race.sessions.fp3.time },
       { name: "Qualifying", time: race.sessions.qualifying.time },
+      { name: "Sprint Qualifying", time: race.sessions.sprintQualifying.time },
       { name: "Sprint", time: race.sessions.sprint.time },
       { name: "Race", time: race.utcStart },
     ];
@@ -177,6 +178,7 @@ export default function ScheduleClient({
         { name: "Practice 2", data: race.sessions.fp2 },
         { name: "Practice 3", data: race.sessions.fp3 },
         { name: "Sprint", data: race.sessions.sprint },
+        { name: "Sprint Qualifying", data: race.sessions.sprintQualifying },
         { name: "Qualifying", data: race.sessions.qualifying },
         { name: "Race", data: race.sessions.race },
       ];
@@ -255,7 +257,7 @@ export default function ScheduleClient({
             </div>
           </CardHeader>
           {/* Show all upcoming sessions for this race */}
-          {(nextSession.race.sessions.fp1.time || nextSession.race.sessions.fp2.time || nextSession.race.sessions.fp3.time || nextSession.race.sessions.qualifying.time || nextSession.race.sessions.sprint.time) && (
+          {(nextSession.race.sessions.fp1.time || nextSession.race.sessions.fp2.time || nextSession.race.sessions.fp3.time || nextSession.race.sessions.qualifying.time || nextSession.race.sessions.sprint.time || nextSession.race.sessions.sprintQualifying.time) && (
             <CardContent className={showWeekendSchedule ? "pt-0 pb-4" : "pt-0 pb-0"}>
               <div className={showWeekendSchedule ? "border-t border-primary/20 pt-4" : "border-t border-primary/20 pt-4"}>
                 <div className="flex items-center justify-between">
@@ -277,6 +279,7 @@ export default function ScheduleClient({
                       { name: "Race", data: nextSession.race.sessions.race },
                       { name: "Qualifying", data: nextSession.race.sessions.qualifying },
                       { name: "Sprint", data: nextSession.race.sessions.sprint },
+                      { name: "Sprint Qualifying", data: nextSession.race.sessions.sprintQualifying },
                       { name: "Practice 3", data: nextSession.race.sessions.fp3 },
                       { name: "Practice 2", data: nextSession.race.sessions.fp2 },
                       { name: "Practice 1", data: nextSession.race.sessions.fp1 }
@@ -354,6 +357,21 @@ export default function ScheduleClient({
                               </span>
                             )}
                             <span className="text-xs text-muted-foreground font-medium">{formatSessionTimeCompact(nextSession.race.sessions.fp3.time, use24Hour)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {nextSession.race.sessions.sprintQualifying.time && (
+                      <div className="group bg-orange-500/10 hover:bg-orange-500/20 rounded-lg p-2.5 transition-colors border border-orange-500/30">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-xs font-semibold text-orange-500">Sprint Qualifying</span>
+                          <div className="flex items-center gap-2 min-w-0">
+                            {new Date(nextSession.race.sessions.sprintQualifying.time).getTime() > Date.now() && (
+                              <span className="text-orange-500 font-mono text-[10px] sm:text-xs font-medium shrink-0 bg-orange-500/10 px-1.5 py-0.5 rounded">
+                                <Countdown utcISO={nextSession.race.sessions.sprintQualifying.time} />
+                              </span>
+                            )}
+                            <span className="text-xs text-muted-foreground font-medium">{formatSessionTimeCompact(nextSession.race.sessions.sprintQualifying.time, use24Hour)}</span>
                           </div>
                         </div>
                       </div>
@@ -497,7 +515,7 @@ export default function ScheduleClient({
               <TableBody>
                 {filtered.map((r) => {
                   const isExpanded = expandedRowId === r.id;
-                  const hasSessions = r.sessions.fp1.time || r.sessions.fp2.time || r.sessions.fp3.time || r.sessions.qualifying.time || r.sessions.sprint.time;
+                  const hasSessions = r.sessions.fp1.time || r.sessions.fp2.time || r.sessions.fp3.time || r.sessions.qualifying.time || r.sessions.sprint.time || r.sessions.sprintQualifying.time;
 
                   // Helper to check if session is finished
                   const isFinished = (isoString: string | null) => {
@@ -587,6 +605,21 @@ export default function ScheduleClient({
                                     </div>
                                   </div>
                                 )}
+                                {r.sessions.sprintQualifying.time && (
+                                  <div className="group bg-orange-500/10 hover:bg-orange-500/20 rounded-lg p-2.5 transition-all border border-orange-500/30 hover:border-orange-500/50">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-xs font-semibold text-orange-500">Sprint Qualifying</span>
+                                      <div className="flex items-center gap-2">
+                                        {new Date(r.sessions.sprintQualifying.time).getTime() > Date.now() && (
+                                          <span className="text-orange-500 font-mono text-[10px] font-medium bg-orange-500/10 px-1.5 py-0.5 rounded">
+                                            <Countdown utcISO={r.sessions.sprintQualifying.time} />
+                                          </span>
+                                        )}
+                                        <span className="text-xs text-muted-foreground font-medium">{formatSessionTimeCompact(r.sessions.sprintQualifying.time, use24Hour)}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                                 {r.sessions.sprint.time && (
                                   <div className="group bg-orange-500/10 hover:bg-orange-500/20 rounded-lg p-2.5 transition-all border border-orange-500/30 hover:border-orange-500/50">
                                     <div className="flex items-center justify-between gap-2">
@@ -639,6 +672,7 @@ export default function ScheduleClient({
                                     r.sessions.race,
                                     r.sessions.qualifying,
                                     r.sessions.sprint,
+                                    r.sessions.sprintQualifying,
                                     r.sessions.fp3,
                                     r.sessions.fp2,
                                     r.sessions.fp1
