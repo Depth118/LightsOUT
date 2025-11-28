@@ -279,10 +279,7 @@ export default function ScheduleClient({
                       { name: "Race", data: nextSession.race.sessions.race },
                       { name: "Qualifying", data: nextSession.race.sessions.qualifying },
                       { name: "Sprint", data: nextSession.race.sessions.sprint },
-                      { name: "Sprint Qualifying", data: nextSession.race.sessions.sprintQualifying },
-                      { name: "Practice 3", data: nextSession.race.sessions.fp3 },
-                      { name: "Practice 2", data: nextSession.race.sessions.fp2 },
-                      { name: "Practice 1", data: nextSession.race.sessions.fp1 }
+                      { name: "Sprint Qualifying", data: nextSession.race.sessions.sprintQualifying }
                     ];
                     // Helper to check if session is finished
                     const isFinished = (isoString: string | null) => {
@@ -672,10 +669,7 @@ export default function ScheduleClient({
                                     r.sessions.race,
                                     r.sessions.qualifying,
                                     r.sessions.sprint,
-                                    r.sessions.sprintQualifying,
-                                    r.sessions.fp3,
-                                    r.sessions.fp2,
-                                    r.sessions.fp1
+                                    r.sessions.sprintQualifying
                                   ];
                                   const latestFinished = sessions.find(s => isFinished(s.time));
 

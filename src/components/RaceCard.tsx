@@ -61,6 +61,7 @@ export function RaceCard({ race, isNext }: RaceCardProps) {
     { name: "Practice 1", data: race.sessions.fp1 },
     { name: "Practice 2", data: race.sessions.fp2 },
     { name: "Practice 3", data: race.sessions.fp3 },
+    { name: "Sprint Qualifying", data: race.sessions.sprintQualifying },
     { name: "Sprint", data: race.sessions.sprint },
     { name: "Qualifying", data: race.sessions.qualifying },
     { name: "Race", data: race.sessions.race },
@@ -68,8 +69,13 @@ export function RaceCard({ race, isNext }: RaceCardProps) {
 
   const raceFinished = isFinished(race.sessions.race.time);
 
-  // Find the latest finished session to link the main button to
-  const latestFinishedSession = [...sessions].reverse().find(s => isFinished(s.data?.time));
+  // Find the latest finished session to link the main button to (excluding Practice)
+  const latestFinishedSession = [...sessions]
+    .reverse()
+    .filter(s => !s.name.includes("Practice") && !s.name.includes("FP"))
+    .find(s => isFinished(s.data?.time));
+
+  console.log(`Race: ${race.name}, Latest Finished: ${latestFinishedSession?.name}, Time: ${latestFinishedSession?.data?.time}`);
 
   return (
     <>
