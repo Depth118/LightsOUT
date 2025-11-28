@@ -3,6 +3,7 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
+    DialogDescription,
 } from "@/components/ui/dialog";
 import {
     Table,
@@ -33,16 +34,14 @@ export function ResultsModal({
     initialSessionKey,
 }: ResultsModalProps) {
     const sessions = race ? [
-        { name: "FP1", full: "Practice 1", data: race.sessions.fp1 },
-        { name: "FP2", full: "Practice 2", data: race.sessions.fp2 },
-        { name: "FP3", full: "Practice 3", data: race.sessions.fp3 },
-        { name: "Sprint", full: "Sprint", data: race.sessions.sprint },
-        { name: "Quali", full: "Qualifying", data: race.sessions.qualifying },
-        { name: "Race", full: "Race", data: race.sessions.race },
+        { name: "Sprint", full: "Sprint", data: race.sessions.sprint, disabled: false },
+        { name: "Quali", full: "Qualifying", data: race.sessions.qualifying, disabled: false },
+        { name: "Race", full: "Race", data: race.sessions.race, disabled: false },
     ].filter(s => s.data?.key) : [];
 
     const [results, setResults] = useState<SessionResult[]>([]);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [activeSessionKey, setActiveSessionKey] = useState<number | null>(null);
 
     // Initialize active session when modal opens or initialSessionKey changes
@@ -61,11 +60,21 @@ export function ResultsModal({
         if (isOpen && activeSessionKey) {
             setLoading(true);
             setResults([]); // Clear previous results
+            setError(null); // Clear previous errors
             // Find the session object to get the name
             const session = sessions.find(s => s.data.key === activeSessionKey);
-            fetchSessionResults(activeSessionKey, session?.name)
+
+            if (session?.disabled || !race) {
+                setLoading(false);
+                return;
+            }
+
+            fetchSessionResults(race.year, race.round, session?.name || "Race")
                 .then(setResults)
-                .catch((err) => console.error("Failed to fetch results", err))
+                .catch((err) => {
+                    console.error("Failed to fetch results", err);
+                    setError(err.message || "Failed to load results");
+                })
                 .finally(() => setLoading(false));
         }
     }, [isOpen, activeSessionKey]);
@@ -83,6 +92,9 @@ export function ResultsModal({
                             <DialogTitle className="font-display text-xl sm:text-2xl">
                                 {race.name} Results
                             </DialogTitle>
+                            <DialogDescription className="sr-only">
+                                Session results for {race.name}
+                            </DialogDescription>
                         </DialogHeader>
                         <button
                             onClick={onClose}
@@ -98,12 +110,15 @@ export function ResultsModal({
                         {sessions.map((session) => (
                             <button
                                 key={session.name}
-                                onClick={() => setActiveSessionKey(session.data.key!)}
+                                onClick={() => !session.disabled && setActiveSessionKey(session.data.key!)}
+                                disabled={session.disabled}
                                 className={cn(
                                     "px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0",
                                     activeSessionKey === session.data.key
                                         ? "bg-primary text-primary-foreground"
-                                        : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                        : session.disabled
+                                            ? "bg-muted/20 text-muted-foreground/50 cursor-not-allowed"
+                                            : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
                                 )}
                             >
                                 {session.name}
@@ -126,6 +141,15 @@ export function ResultsModal({
                         {loading ? (
                             <div className="flex justify-center py-12">
                                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            </div>
+                        ) : activeSession?.disabled ? (
+                            <div className="text-center py-12 text-muted-foreground bg-muted/10 rounded-lg border border-dashed">
+                                Practice session results are not available.
+                            </div>
+                        ) : error ? (
+                            <div className="text-center py-12 text-destructive bg-destructive/10 rounded-lg border border-destructive/20 p-4">
+                                <p className="font-medium">Unable to load results</p>
+                                <p className="text-sm opacity-80 mt-1">{error}</p>
                             </div>
                         ) : results.length === 0 ? (
                             <div className="text-center py-12 text-muted-foreground bg-muted/10 rounded-lg border border-dashed">

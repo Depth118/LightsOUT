@@ -2,19 +2,21 @@ import {
   fetchCurrentSeasonSchedule,
   fetchDriverStandings,
   fetchConstructorStandings,
-  fetchDriverImages,
 } from "@/lib/f1";
 import ScheduleClient from "@/components/ScheduleClient";
 import Leaderboard from "@/components/Leaderboard";
 import { Brand } from "@/components/ui/brand";
 
+import { DRIVER_IMAGES } from "@/lib/driverImages";
+
 export default async function Home() {
-  const [schedule, driverStandings, constructorStandings, driverImages] = await Promise.all([
+  const [schedule, driverStandings, constructorStandings] = await Promise.all([
     fetchCurrentSeasonSchedule(),
     fetchDriverStandings(),
     fetchConstructorStandings(),
-    fetchDriverImages(),
   ]);
+
+  const driverImages = DRIVER_IMAGES;
 
   return (
     <div className="min-h-dvh px-4 py-6 sm:px-8 sm:py-10">

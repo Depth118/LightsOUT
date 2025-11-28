@@ -1,3 +1,5 @@
+import { getDriverImage, getTeamColor } from "./driverImages";
+
 export type OpenF1Meeting = {
   meeting_key: number;
   meeting_name: string;
@@ -72,6 +74,7 @@ export type NormalizedRace = {
   country: string;
   city: string;
   round: number;
+  year: number;
   utcStart: string | null; // ISO string in UTC
   sessions: {
     fp1: SessionInfo;
@@ -97,245 +100,150 @@ function formatTimeValue(val: string | number | null | undefined): string {
   return strVal;
 }
 
-export async function fetchSessionResults(sessionKey: number, sessionType?: string): Promise<SessionResult[]> {
-  // If it's a dummy key (negative), return empty results immediately
-  if (sessionKey < 0) return [];
+export async function fetchSessionResults(year: number, round: number, sessionType: string): Promise<SessionResult[]> {
+  // Jolpica/Ergast does not support practice session results
+  if (sessionType.startsWith("FP") || sessionType.includes("Practice")) {
+    return [];
+  }
 
-  const [resultsRes, driversRes] = await Promise.all([
-    fetch(`https://api.openf1.org/v1/session_result?session_key=${sessionKey}`),
-    fetch(`https://api.openf1.org/v1/drivers?session_key=${sessionKey}`)
-  ]);
+  let url = `https://api.jolpi.ca/ergast/f1/${year}/${round}/results.json`;
+  if (sessionType === "Quali" || sessionType === "Qualifying") {
+    url = `https://api.jolpi.ca/ergast/f1/${year}/${round}/qualifying.json`;
+  } else if (sessionType === "Sprint") {
+    url = `https://api.jolpi.ca/ergast/f1/${year}/${round}/sprint.json`;
+  }
 
-  if (!resultsRes.ok || !driversRes.ok) return [];
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      // If 404, it might just mean results aren't out yet, so return empty
+      if (res.status === 404) return [];
+      throw new Error(`Failed to fetch results: ${res.statusText}`);
+    }
 
-  const results = (await resultsRes.json()) as any[];
-  const drivers = (await driversRes.json()) as OpenF1Driver[];
+    const data = await res.json();
+    const raceTable = data.MRData.RaceTable;
+    if (!raceTable.Races || raceTable.Races.length === 0) {
+      return [];
+    }
 
-  const driverMap = new Map(drivers.map(d => [d.driver_number, d]));
+    const raceData = raceTable.Races[0];
+    let results: any[] = [];
 
-  return results
-    .sort((a, b) => (a.position || 999) - (b.position || 999))
-    .map(r => {
-      const driver = driverMap.get(r.driver_number);
+    if (sessionType === "Quali" || sessionType === "Qualifying") {
+      results = raceData.QualifyingResults || [];
+    } else if (sessionType === "Sprint") {
+      results = raceData.SprintResults || [];
+    } else {
+      results = raceData.Results || [];
+    }
 
-      // Format time/gap
+    // Fetch driver images for mapping
+    // const driverImages = await fetchDriverImages();
+
+    return results.map((r: any) => {
+      const driver = r.Driver;
+      const constructor = r.Constructor;
+      const driverId = driver.driverId;
+
+      // Map time/gap
       let timeStr = "";
-      if (r.position === 1) {
-        if (sessionType === "Race") {
-          timeStr = "N/A";
-        } else {
-          // Format duration to mm:ss.ms if possible, but OpenF1 gives seconds
-          // If duration is available
-          if (r.time) {
-            timeStr = formatTimeValue(r.time);
-          } else if (r.duration) {
-            // Handle duration which can be number or array of numbers
-            const durationVal = Array.isArray(r.duration)
-              ? r.duration[r.duration.length - 1]
-              : r.duration;
-
-            const minutes = Math.floor(durationVal / 60);
-            const seconds = (durationVal % 60).toFixed(3);
-            timeStr = `${minutes}:${seconds.padStart(6, '0')}`;
-          } else {
-            timeStr = "Finished";
-          }
-        }
-      } else {
-        const gap = r.gap_to_leader ? `+${formatTimeValue(r.gap_to_leader)}` : r.status || "";
-        timeStr = gap;
-        if (r.dnf) timeStr = "DNF";
-        if (r.dns) timeStr = "DNS";
-        if (r.dsq) timeStr = "DSQ";
+      if (r.Time) {
+        timeStr = r.Time.time;
+      } else if (r.status) {
+        timeStr = r.status; // e.g. "+1 Lap", "DNF"
       }
 
-      // Manual overrides for missing headshots
-      let headshotUrl = driver?.headshot_url ?? null;
-      if (r.driver_number === 43 && !headshotUrl) {
-        // Franco Colapinto fallback
-        headshotUrl = "https://media.formula1.com/d_driver_fallback_image.png/content/dam/fom-website/drivers/F/FRACOL01_Franco_Colapinto/fracol01.png.transform/2col/image.png";
+      // For Qualifying, use Q3 time, else Q2, else Q1
+      if (sessionType === "Quali" || sessionType === "Qualifying") {
+        timeStr = r.Q3 || r.Q2 || r.Q1 || "";
       }
 
       return {
-        position: r.position,
-        driverNumber: r.driver_number,
-        driverName: driver?.full_name ?? r.full_name ?? "Unknown", // Fallback to result name if driver missing
-        driverAcronym: driver?.name_acronym ?? r.abbreviation ?? "UNK",
-        teamName: driver?.team_name ?? r.team_name ?? "Unknown",
-        teamColour: driver?.team_colour ?? "000000",
+        position: parseInt(r.position),
+        driverNumber: parseInt(driver.permanentNumber),
+        driverName: `${driver.givenName} ${driver.familyName}`,
+        driverAcronym: driver.code,
+        teamName: constructor.name,
+        teamColour: getTeamColor(constructor.name).replace("#", ""),
         time: timeStr,
-        points: Number(r.points) || 0, // Ensure points is a number
-        headshotUrl,
+        points: parseFloat(r.points) || 0,
+        headshotUrl: getDriverImage(driverId),
       };
     });
+
+  } catch (error) {
+    console.error("Error fetching Jolpica results:", error);
+    throw error;
+  }
 }
 
 export async function fetchCurrentSeasonSchedule(): Promise<NormalizedRace[]> {
   const year = new Date().getFullYear();
 
-  // Fetch meetings and sessions in parallel
-  const [meetingsRes, sessionsRes] = await Promise.all([
-    fetch(`https://api.openf1.org/v1/meetings?year=${year}`, {
+  try {
+    const res = await fetch(`https://api.jolpi.ca/ergast/f1/${year}.json`, {
       next: { revalidate: 3600 },
-    }),
-    fetch(`https://api.openf1.org/v1/sessions?year=${year}`, {
-      next: { revalidate: 3600 },
-    }),
-  ]);
+    });
 
-  if (!meetingsRes.ok || !sessionsRes.ok) {
-    throw new Error("Failed to fetch F1 data from OpenF1");
-  }
-
-  const meetings = (await meetingsRes.json()) as OpenF1Meeting[];
-  const sessions = (await sessionsRes.json()) as OpenF1Session[];
-
-  // Filter out testing sessions if necessary, though OpenF1 usually labels them clearly.
-  // We'll assume all meetings returned are relevant, but we might want to sort them by date.
-  const sortedMeetings = meetings.sort(
-    (a, b) => new Date(a.date_start).getTime() - new Date(b.date_start).getTime()
-  );
-
-  // Group sessions by meeting_key
-  const sessionsByMeeting = new Map<number, OpenF1Session[]>();
-  for (const session of sessions) {
-    const key = session.meeting_key;
-    if (!sessionsByMeeting.has(key)) {
-      sessionsByMeeting.set(key, []);
+    if (!res.ok) {
+      throw new Error("Failed to fetch F1 schedule from Jolpica");
     }
-    sessionsByMeeting.get(key)!.push(session);
-  }
 
-  const normalized = sortedMeetings.map((meeting, index) => {
-    const meetingSessions = sessionsByMeeting.get(meeting.meeting_key) ?? [];
+    const data = await res.json();
+    const races = data.MRData.RaceTable.Races;
 
-    // Find specific sessions
-    const findSession = (namePattern: RegExp): SessionInfo => {
-      const s = meetingSessions.find(s => namePattern.test(s.session_name));
-      // If session exists but has no key (future session), generate a deterministic dummy key
-      // using meeting_key and a hash of the pattern to ensure buttons appear
-      let key = s?.session_key ?? null;
-      if (!key && s) {
-        // Simple deterministic dummy key: meeting_key * 100 + index based on type
-        // This is just to ensure the UI renders the button
-        key = -(meeting.meeting_key * 100 + (namePattern.source.length));
-      }
+    return races.map((race: any) => {
+      const round = parseInt(race.round);
+
+      // Helper to create session info
+      const createSession = (sessionData: any, typeId: number): SessionInfo => {
+        if (!sessionData) return { time: null, key: null };
+        const time = `${sessionData.date}T${sessionData.time}`;
+        // Generate a deterministic key: year * 10000 + round * 100 + typeId
+        // typeId: 1=FP1, 2=FP2, 3=FP3, 4=Quali, 5=SprintQuali, 6=Sprint, 7=Race
+        const key = -(year * 10000 + round * 100 + typeId);
+        return { time, key };
+      };
+
+      const fp1 = createSession(race.FirstPractice, 1);
+      const fp2 = createSession(race.SecondPractice, 2);
+      const fp3 = createSession(race.ThirdPractice, 3);
+      const qualifying = createSession(race.Qualifying, 4);
+      const sprintQualifying = createSession(race.SprintQualifying, 5);
+      const sprint = createSession(race.Sprint, 6);
+      const raceSession = {
+        time: `${race.date}T${race.time}`,
+        key: -(year * 10000 + round * 100 + 7)
+      };
 
       return {
-        time: s?.date_start ?? null,
-        key
+        id: `${race.season}-${race.round}`,
+        name: race.raceName,
+        circuit: race.Circuit.circuitName,
+        country: race.Circuit.Location.country,
+        city: race.Circuit.Location.locality,
+        round: round,
+        year: parseInt(race.season),
+        utcStart: raceSession.time,
+        sessions: {
+          fp1,
+          fp2,
+          fp3,
+          qualifying,
+          sprintQualifying,
+          sprint,
+          race: raceSession
+        },
       };
-    };
+    });
 
-    let fp1 = findSession(/Practice 1/i);
-    let fp2 = findSession(/Practice 2/i);
-    let fp3 = findSession(/Practice 3/i);
-    // Ensure Qualifying does not match "Sprint Qualifying"
-    let qualifying = findSession(/^(?!.*Sprint).*Qualifying/i);
-    // Sprint Qualifying
-    let sprintQualifying = findSession(/Sprint.*Qualifying/i);
-    // Ensure Sprint does not match "Sprint Qualifying" (matches "Sprint" or "Sprint Race")
-    let sprint = findSession(/^Sprint(?!.*Qualifying)/i);
-
-    // The main race start time usually corresponds to the "Race" session
-    let raceSession = findSession(/^Race$/i);
-
-    // Patch for Las Vegas 2025 if sessions are missing or incomplete
-    // Check by name OR key to be robust
-    if ((meeting.meeting_key === 1274 || meeting.meeting_name.includes("Las Vegas")) && meeting.year === 2025) {
-      // Use dummy keys (negative) to allow UI to render buttons, even if API returns no data
-      // Las Vegas race: 10:00 PM PST Nov 22 = 4:00 AM UTC Nov 23 = 9:30 AM IST Nov 23
-      if (!raceSession.time) raceSession = { time: "2025-11-23T04:00:00Z", key: -1 };
-      if (!fp1.time) fp1 = { time: "2025-11-21T02:30:00Z", key: -2 };
-      if (!fp2.time) fp2 = { time: "2025-11-21T06:00:00Z", key: -3 };
-      if (!fp3.time) fp3 = { time: "2025-11-22T02:30:00Z", key: -4 };
-      if (!qualifying.time) qualifying = { time: "2025-11-22T06:00:00Z", key: -5 };
-      if (!sprintQualifying.time) sprintQualifying = { time: null, key: null }; // No sprint quali for Vegas
-    }
-
-    // Patch for Qatar 2025 if sessions are missing (API only returns FP1 as of late Nov 2025)
-    if ((meeting.meeting_key === 1275 || meeting.meeting_name.includes("Qatar")) && meeting.year === 2025) {
-      if (!raceSession.time) raceSession = { time: "2025-11-30T16:00:00Z", key: -10 };
-      // Sprint weekend structure
-      if (!sprint.time) sprint = { time: "2025-11-29T14:00:00Z", key: -12 };
-      if (!sprintQualifying.time) sprintQualifying = { time: "2025-11-28T17:30:00Z", key: -14 }; // Est time
-      if (!qualifying.time) qualifying = { time: "2025-11-29T18:00:00Z", key: -13 };
-      // Note: OpenF1 might not have a dedicated field for Sprint Qualifying in our NormalizedRace yet,
-      // but we ensure the main Race/Sprint/Quali are present so it doesn't disappear.
-    }
-
-    // Fallback to meeting start date if race session not found (though it should be there for valid races)
-    const utcStart = raceSession.time ?? meeting.date_start;
-
-    return {
-      id: `${meeting.year}-${meeting.meeting_key}`,
-      name: meeting.meeting_name,
-      circuit: meeting.circuit_short_name,
-      country: meeting.country_name,
-      city: meeting.location,
-      round: index + 1, // Infer round from sorted order
-      utcStart,
-      sessions: {
-        fp1,
-        fp2,
-        fp3,
-        qualifying,
-        sprintQualifying,
-        sprint,
-        race: raceSession
-      },
-    };
-  });
-
-  // Append missing races for 2025 (Qatar and Abu Dhabi) if they are not in the list
-  if (year === 2025) {
-    const hasQatar = normalized.some(r => r.country === "Qatar");
-    const hasAbuDhabi = normalized.some(r => r.country === "UAE" || r.city === "Yas Island");
-
-    if (!hasQatar) {
-      normalized.push({
-        id: "2025-qatar",
-        name: "Qatar Grand Prix",
-        circuit: "Lusail",
-        country: "Qatar",
-        city: "Lusail",
-        round: normalized.length + 1,
-        utcStart: "2025-11-30T16:00:00Z",
-        sessions: {
-          fp1: { time: "2025-11-28T13:30:00Z", key: null }, // Est
-          qualifying: { time: "2025-11-29T18:00:00Z", key: null }, // Sprint Quali
-          sprintQualifying: { time: "2025-11-28T17:30:00Z", key: null },
-          sprint: { time: "2025-11-29T14:00:00Z", key: null },
-          fp2: { time: null, key: null }, // Sprint weekend
-          fp3: { time: null, key: null },
-          race: { time: "2025-11-30T16:00:00Z", key: null }
-        }
-      });
-    }
-
-    if (!hasAbuDhabi) {
-      normalized.push({
-        id: "2025-abudhabi",
-        name: "Abu Dhabi Grand Prix",
-        circuit: "Yas Marina",
-        country: "UAE",
-        city: "Yas Island",
-        round: normalized.length + 1,
-        utcStart: "2025-12-07T13:00:00Z",
-        sessions: {
-          fp1: { time: "2025-12-05T09:30:00Z", key: null }, // Est
-          fp2: { time: "2025-12-05T13:00:00Z", key: null }, // Est
-          fp3: { time: "2025-12-06T10:30:00Z", key: null }, // Est
-          qualifying: { time: "2025-12-06T14:00:00Z", key: null }, // Est
-          sprintQualifying: { time: null, key: null },
-          sprint: { time: null, key: null },
-          race: { time: "2025-12-07T13:00:00Z", key: null }
-        }
-      });
-    }
+  } catch (error) {
+    console.error("Error fetching schedule:", error);
+    // Return empty array or throw depending on desired behavior. 
+    // Throwing allows the error boundary/page to handle it.
+    throw error;
   }
-
-  return normalized;
 }
 
 export function getNextRace(
@@ -422,28 +330,5 @@ export async function fetchConstructorStandings(): Promise<ConstructorStanding[]
   }
 }
 
-export async function fetchDriverImages(): Promise<Record<string, string>> {
-  try {
-    const res = await fetch("https://api.openf1.org/v1/drivers?session_key=latest", {
-      next: { revalidate: 86400 }, // Cache for 24 hours
-    });
 
-    if (!res.ok) {
-      throw new Error("Failed to fetch driver images");
-    }
 
-    const data = await res.json();
-    const imageMap: Record<string, string> = {};
-
-    data.forEach((driver: any) => {
-      if (driver.driver_number && driver.headshot_url) {
-        imageMap[driver.driver_number.toString()] = driver.headshot_url;
-      }
-    });
-
-    return imageMap;
-  } catch (error) {
-    console.error("Error fetching driver images:", error);
-    return {};
-  }
-}
